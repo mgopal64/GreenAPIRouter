@@ -1,0 +1,3 @@
+# MCP server only (kept separate so the backend deploy doesn't change). It talks to the backend over HTTP.
+mcp==2.3.0
+httpx==0.28.1
