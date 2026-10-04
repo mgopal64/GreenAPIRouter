@@ -1,5 +1,13 @@
-"""Poll EIA-930 hourly generation by fuel type, compute gCO2/kWh and generation water
-per kWh for each region, and upsert into TigerData (table: grid_intensity).
+"""Poll EIA-930 hourly generation by fuel type, compute per region and hour:
+  gco2_per_kwh            = sum(fuel share x emission factor)
+  gen_water_l_per_kwh     = sum(fuel share x water factor)                  (physical, off-site)
+  sw_gen_water_l_per_kwh  = sum(fuel share x water factor x fuel's basin stress for the month)
+and upsert into TigerData (table: grid_intensity).
+
+Fuel basin stress comes from fuel_stress (jobs/load_plants.py). Fuels without a value fall
+back to the region's site stress (water_stress, jobs/load_water.py). If neither is loaded,
+sw_gen_water_l_per_kwh is left NULL and scoring.py falls back too.
+Re-run the 365-day backfill after loading or changing stress data.
 
 Run from the repo root:
   python -m jobs.eia_ingest --days 2 --dry-run   # test your EIA key, no DB writes
@@ -60,8 +68,10 @@ def fetch_fuel_mix(api_key: str, ba: str, start: datetime, end: datetime) -> lis
         offset += PAGE
 
 
-def to_hourly(rows: list[dict]) -> list[tuple]:
-    """Fuel rows -> [(ts_utc, gco2_per_kwh, gen_water_l_per_kwh, total_mwh)] per hour."""
+def to_hourly(rows: list[dict], fuel_stress: dict | None = None,
+              site_stress: dict | None = None) -> list[tuple]:
+    """Fuel rows -> [(ts_utc, gco2, gen_water, total_mwh, sw_gen_water_or_None)] per hour.
+    fuel_stress: {(fuel, month): stress}; site_stress: {month: stress}."""
     by_hour = defaultdict(dict)
     for row in rows:
         if row.get("value") is None:
@@ -76,17 +86,43 @@ def to_hourly(rows: list[dict]) -> list[tuple]:
         g = sum(m * EMISSION_G_PER_KWH.get(f, DEFAULT_G) for f, m in mix.items()) / total
         w = sum(m * WATER_L_PER_KWH.get(f, DEFAULT_W) for f, m in mix.items()) / total
         ts = datetime.strptime(period, "%Y-%m-%dT%H").replace(tzinfo=timezone.utc)
-        out.append((ts, g, w, total))
+        out.append((ts, g, w, total, _stress_weighted(mix, total, ts.month, fuel_stress, site_stress)))
     return out
 
 
+def _stress_weighted(mix: dict, total: float, month: int,
+                     fuel_stress: dict | None, site_stress: dict | None) -> float | None:
+    """Per-fuel hourly mix weighting: each fuel's water is weighted by its own plants' basins."""
+    fuel_stress, site_stress = fuel_stress or {}, site_stress or {}
+    sw = 0.0
+    for fuel, mwh in mix.items():
+        water = WATER_L_PER_KWH.get(fuel, DEFAULT_W)
+        if water == 0:
+            continue  # solar/wind/hydro/storage: no consumptive water, stress irrelevant
+        s = fuel_stress.get((fuel, month), site_stress.get(month))
+        if s is None:
+            return None  # stress not loaded yet
+        sw += mwh * water * s
+    return sw / total
+
+
+def load_stress(conn, region: str) -> tuple[dict, dict]:
+    fuel = {(f, m): s for f, m, s in conn.execute(
+        "SELECT fuel, month, stress FROM fuel_stress WHERE region = %s", (region,)).fetchall()}
+    site = {m: s for m, s in conn.execute(
+        "SELECT month, stress FROM water_stress WHERE region = %s", (region,)).fetchall()}
+    return fuel, site
+
+
 UPSERT = """
-INSERT INTO grid_intensity (ts, region, ba, gco2_per_kwh, gen_water_l_per_kwh, total_mwh)
-VALUES (%s, %s, %s, %s, %s, %s)
+INSERT INTO grid_intensity (ts, region, ba, gco2_per_kwh, gen_water_l_per_kwh, total_mwh,
+                            sw_gen_water_l_per_kwh)
+VALUES (%s, %s, %s, %s, %s, %s, %s)
 ON CONFLICT (ts, region) DO UPDATE SET
   gco2_per_kwh = EXCLUDED.gco2_per_kwh,
   gen_water_l_per_kwh = EXCLUDED.gen_water_l_per_kwh,
-  total_mwh = EXCLUDED.total_mwh
+  total_mwh = EXCLUDED.total_mwh,
+  sw_gen_water_l_per_kwh = EXCLUDED.sw_gen_water_l_per_kwh
 """
 
 
@@ -99,28 +135,33 @@ def main():
 
     end = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     start = end - timedelta(days=args.days)
-    results = {}
-    for region, ba in REGION_BA.items():
-        hourly = to_hourly(fetch_fuel_mix(os.environ["EIA_API_KEY"], ba, start, end))
-        results[region] = (ba, hourly)
-        if hourly:
-            ts, g, w, _ = hourly[-1]
-            print(f"{region} ({ba}): {len(hourly)} hours | latest {ts:%Y-%m-%d %H}:00 UTC "
-                  f"| {g:.0f} gCO2/kWh | {w:.2f} L/kWh | lag {end - ts}")
-        else:
-            print(f"{region} ({ba}): no data returned")
 
-    if args.dry_run:
-        return
+    conn = None
+    if not args.dry_run:
+        import psycopg
+        conn = psycopg.connect(os.environ["TIGER_DSN"])
 
-    import psycopg
-    with psycopg.connect(os.environ["TIGER_DSN"]) as conn:
-        with conn.cursor() as cur:
-            for region, (ba, hourly) in results.items():
-                cur.executemany(UPSERT, [(ts, region, ba, g, w, t) for ts, g, w, t in hourly])
-        conn.execute("REFRESH MATERIALIZED VIEW typical_hourly")
-        conn.commit()
-    print("Upserted to TigerData and refreshed typical_hourly.")
+    try:
+        for region, ba in REGION_BA.items():
+            fuel_s, site_s = load_stress(conn, region) if conn else ({}, {})
+            hourly = to_hourly(fetch_fuel_mix(os.environ["EIA_API_KEY"], ba, start, end), fuel_s, site_s)
+            if hourly:
+                ts, g, w, _, sw = hourly[-1]
+                sw_txt = f"{sw:.2f}" if sw is not None else "n/a (stress not loaded)"
+                print(f"{region} ({ba}): {len(hourly)} hours | latest {ts:%Y-%m-%d %H}:00 UTC "
+                      f"| {g:.0f} gCO2/kWh | {w:.2f} L/kWh | stress-weighted {sw_txt} | lag {end - ts}")
+            else:
+                print(f"{region} ({ba}): no data returned")
+            if conn:
+                with conn.cursor() as cur:
+                    cur.executemany(UPSERT, [(ts, region, ba, g, w, t, sw) for ts, g, w, t, sw in hourly])
+        if conn:
+            conn.execute("REFRESH MATERIALIZED VIEW typical_hourly")
+            conn.commit()
+            print("Upserted to TigerData and refreshed typical_hourly.")
+    finally:
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":

@@ -48,17 +48,23 @@ class RegionShare(BaseModel):
     water_stress_score: float
     lat: float
     lon: float
+    # Added (backward compatible): where the grid number came from and the water split
+    grid_source: str = "static"            # live | recent | yesterday | typical | static
+    site_stress: float = 0.0               # 0-1, data center watershed this month
+    stress_weighted_l_per_kwh: float = 0.0
 
 
 class NaiveBaseline(BaseModel):
     region: str
     co2_g: float
-    water_l: float
+    water_l: float                          # physical: direct + indirect
+    water_stress_l: float = 0.0             # stress-weighted impact
 
 
 class Totals(BaseModel):
     co2_g: float
     water_l: float
+    water_stress_l: float = 0.0
 
 
 class Savings(BaseModel):
@@ -66,6 +72,8 @@ class Savings(BaseModel):
     water_l: float
     pct_co2: float
     pct_water: float
+    water_stress_l: float = 0.0
+    pct_water_stress: float = 0.0
 
 
 class RouteResponse(BaseModel):
@@ -82,6 +90,23 @@ class CompleteRequest(StrictModel):
     weights: Weights = Weights()
 
 
+class CallImpact(BaseModel):
+    energy_wh: float
+    co2_g: float
+    water_ml: float                 # physical: direct + indirect
+    water_stress_ml: float          # stress-weighted impact
+    cost_usd: float
+
+
+class CompleteImpact(BaseModel):
+    actual: CallImpact
+    baseline: CallImpact            # large model in the default region, same tokens
+    baseline_deployment: str
+    baseline_region: str
+    pct_saved: dict[str, float]
+    grid_source: str                # live | recent | yesterday | typical | static
+
+
 class CompleteResponse(BaseModel):
     complexity: Literal["simple", "medium", "complex"]
     deployment: str
@@ -89,3 +114,4 @@ class CompleteResponse(BaseModel):
     output: str
     prompt_tokens: int
     completion_tokens: int
+    impact: CompleteImpact | None = None   # added; None if accounting failed
