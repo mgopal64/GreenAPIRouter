@@ -13,6 +13,8 @@ class StrictModel(BaseModel):
 
 class PickModelRequest(StrictModel):
     prompt: str = Field(min_length=1, max_length=20_000)
+    user_preference: float = Field(0.5, ge=0, le=1)  # 0 = max eco, 0.5 = default, 1 = max conservative
+    simplification_mode: Literal["none", "structural"] = "structural"
 
 
 class EstimatedSavings(BaseModel):
@@ -88,6 +90,8 @@ class RouteResponse(BaseModel):
 class CompleteRequest(StrictModel):
     prompt: str = Field(min_length=1, max_length=4_000)
     weights: Weights = Weights()
+    user_preference: float = Field(0.5, ge=0, le=1)  # 0 = max eco, 0.5 = default, 1 = max conservative
+    simplification_mode: Literal["none", "structural"] = "structural"
 
 
 class CallImpact(BaseModel):

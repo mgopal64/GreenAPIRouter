@@ -229,7 +229,14 @@ async def complete(
         raise HTTPException(429, "Daily live-call limit reached")
 
     # Model inference is CPU-bound; run it in a thread so it doesn't block the event loop.
-    pick = await asyncio.to_thread(picker.pick_model, PickModelRequest(prompt=req.prompt))
+    pick = await asyncio.to_thread(
+        picker.pick_model,
+        PickModelRequest(
+            prompt=req.prompt,
+            user_preference=req.user_preference,
+            simplification_mode=req.simplification_mode,
+        ),
+    )
     size = "large" if pick.complexity == "complex" else "small"
     # Routing may query TigerData (blocking I/O); keep it off the event loop like the picker.
     region = await asyncio.to_thread(router.choose_region, req.weights)
