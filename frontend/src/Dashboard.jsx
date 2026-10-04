@@ -104,6 +104,34 @@ function heroRegions(distribution) {
   return west.map((r, i) => ({ name: regionName(r.region), share: r.share, pct: pct[i], carbon: r.grid_carbon_gco2_kwh }))
 }
 
+const CostIcon = () => <span className="cost-icon" aria-hidden="true">$</span>
+
+// Short, readable number for tiny per-call values (3 significant figures).
+const sig = (x) => (x === 0 ? '0' : Number(x.toPrecision(3)).toString())
+
+// Real impact of one live call, from Azure's actual token counts (accounting.py), vs the naive setup.
+function LiveImpact({ impact }) {
+  const { actual, pct_saved: pct } = impact
+  return (
+    <div className="live-impact">
+      <p className="small">
+        <strong>This call vs. naive</strong>{' '}
+        <span className="muted">({impact.baseline_deployment} in {regionName(impact.baseline_region)}, same tokens)</span>
+      </p>
+      <p className="badges">
+        <Badge value={pct.energy_wh} label="energy" Icon={BoltIcon} kind="carbon" />
+        <Badge value={pct.co2_g} label="CO₂" Icon={BoltIcon} kind="carbon" />
+        <Badge value={pct.water_stress_ml} label="water impact" Icon={DropIcon} kind="water" />
+        <Badge value={pct.cost_usd} label="cost" Icon={CostIcon} kind="neutral" />
+      </p>
+      <p className="muted small mono">
+        Used {sig(actual.energy_wh)} Wh · {sig(actual.co2_g)} g CO₂ · {sig(actual.water_ml)} mL water · ${sig(actual.cost_usd)}
+        {' '}— from real token counts, {impact.grid_source === 'static' ? 'static grid estimates' : `${impact.grid_source} EIA grid data`}.
+      </p>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [prompt, setPrompt] = useState(SAMPLES[0].text)
   const [pick, setPick] = useState(null)
@@ -278,7 +306,7 @@ export default function Dashboard() {
                 {pick.recommended_model !== pick.default_model ? (
                   <div className={stale ? 'result stale' : 'result'}>
                     <span className="badge carbon">
-                      <BoltIcon /> at a million calls, saves <strong className="mono">{perMillion(pick.estimated_savings.energy_wh / 1000)} kWh</strong> · <strong className="mono">{perMillion(pick.estimated_savings.co2_g / 1000)} kg</strong> CO₂ · <strong className="mono">{perMillion(pick.estimated_savings.water_ml / 1000)} L</strong> water
+                      <BoltIcon /> at 1M calls, saves <strong className="mono">{perMillion(pick.estimated_savings.energy_wh / 1000)} kWh</strong> · <strong className="mono">{perMillion(pick.estimated_savings.co2_g / 1000)} kg</strong> CO₂ · <strong className="mono">{perMillion(pick.estimated_savings.water_ml / 1000)} L</strong> water
                     </span>
                     {pick.token_estimate && (
                       <p className="muted small token-note">
@@ -351,6 +379,7 @@ export default function Dashboard() {
                   <p className="muted small mono">{live.deployment} · {regionName(live.region)} · {live.prompt_tokens} in / {live.completion_tokens} out</p>
                   {/* Plain text only: React escapes this, so model output can never inject HTML. */}
                   <p className="answer">{live.output || '(empty response)'}</p>
+                  {live.impact && <LiveImpact impact={live.impact} />}
                 </>
               )}
             </section>
