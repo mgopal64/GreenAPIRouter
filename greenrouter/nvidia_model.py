@@ -8,6 +8,11 @@ from huggingface_hub import PyTorchModelHubMixin, hf_hub_download
 from transformers import AutoModel, AutoTokenizer
 
 REPO = "nvidia/prompt-task-and-complexity-classifier"
+# Pin exact versions (Hugging Face commit ids) so a change upstream can't silently change the picker
+# or pull in tampered files. These are the versions the 0.70 cutoff was validated with.
+REPO_REVISION = "fea1121511eafabaf7dd6fc66863dcb04f74defb"
+BACKBONE = "microsoft/DeBERTa-v3-base"
+BACKBONE_REVISION = "8ccc9b6f36199bec6961081d44eb72fb3f7353f3"
 
 
 class MeanPooling(nn.Module):
@@ -30,7 +35,7 @@ class MulticlassHead(nn.Module):
 class CustomModel(nn.Module, PyTorchModelHubMixin):
     def __init__(self, target_sizes, task_type_map, weights_map, divisor_map):
         super().__init__()
-        self.backbone = AutoModel.from_pretrained("microsoft/DeBERTa-v3-base")
+        self.backbone = AutoModel.from_pretrained(BACKBONE, revision=BACKBONE_REVISION)
         self.target_sizes = target_sizes.values()
         self.task_type_map = task_type_map
         self.weights_map = weights_map
@@ -127,15 +132,15 @@ def _load():
     if _model is not None:
         return
     # Caller holds _lock.
-    with open(hf_hub_download(REPO, "config.json")) as f:
+    with open(hf_hub_download(REPO, "config.json", revision=REPO_REVISION)) as f:
         config = json.load(f)
-    _tokenizer = AutoTokenizer.from_pretrained(REPO)
+    _tokenizer = AutoTokenizer.from_pretrained(REPO, revision=REPO_REVISION)
     _model = CustomModel(
         target_sizes=config["target_sizes"],
         task_type_map=config["task_type_map"],
         weights_map=config["weights_map"],
         divisor_map=config["divisor_map"],
-    ).from_pretrained(REPO)
+    ).from_pretrained(REPO, revision=REPO_REVISION)
     _model.eval()
 
 

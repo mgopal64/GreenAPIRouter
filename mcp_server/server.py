@@ -25,6 +25,11 @@ if urlparse(API_URL).scheme not in ("http", "https"):
 # httpx logs every request at INFO; keep the MCP client's logs readable.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+def _num(x: float) -> str:
+    """Readable number: 1,625 rather than 1.63e+03; small values keep 3 significant digits."""
+    return f"{x:,.0f}" if abs(x) >= 100 else f"{x:.3g}"
+
+
 REGION_LABELS = {"westus": "West US", "northcentralus": "North Central US"}
 ERRORS = {
     422: "The request was rejected as invalid (check the prompt length and weights).",
@@ -36,18 +41,27 @@ READ_ONLY = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempot
 mcp = MCPServer(
     name="green-router",
     instructions=(
-        "Green Router reduces the carbon and water footprint of AI calls. Use pick_model before sending "
-        "a prompt to an LLM to find the lightest model that can handle it, and route_calls to split a "
-        "batch of calls across Azure regions by grid carbon and watershed stress. Numbers come from "
-        "static estimates unless grid_source says live EIA data."
+        "Green Router reduces the carbon and water footprint of AI calls. Use pick_model (or pick_models "
+        "for a batch) before sending prompts to an LLM to find the lightest model that can handle them, and "
+        "route_calls to split a batch of calls across Azure regions by grid carbon and watershed stress. "
+        "region_snapshot and grid_replay show the grid data behind the routing; savings_so_far reports real "
+        "savings from logged live calls. Numbers come from static estimates unless grid_source says EIA data."
     ),
 )
 
 
 async def _post(path: str, body: dict) -> dict:
+    return await _request("POST", path, json=body)
+
+
+async def _get(path: str, params: dict | None = None) -> dict | list:
+    return await _request("GET", path, params=params)
+
+
+async def _request(method: str, path: str, **kwargs) -> dict | list:
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            res = await client.post(f"{API_URL}{path}", json=body)
+            res = await client.request(method, f"{API_URL}{path}", **kwargs)
     except httpx.HTTPError:
         raise ToolError(f"Can't reach the Green Router backend at {API_URL}. Is it running?") from None
     if res.status_code != 200:
@@ -76,7 +90,7 @@ async def pick_model(
     r["summary"] = (
         f"Use {r['recommended_model']} ({r['complexity']} prompt). Saves ~{s['energy_wh']} Wh, "
         f"{s['co2_g']} g CO2 and {s['water_ml']} mL water per call vs {r['default_model']} "
-        f"(~{s['energy_wh'] * 1000:.3g} kWh per 1M calls)."
+        f"(~{_num(s['energy_wh'] * 1000)} kWh per 1M calls)."
         if downgraded
         else f"This prompt needs {r['recommended_model']} ({r['complexity']} prompt); no smaller model fits."
     )
@@ -110,6 +124,84 @@ async def route_calls(
     r["summary"] = (
         f"Send {split}. {change(s['pct_co2'], 'CO2')} and {change(s['pct_water_stress'], 'water impact')} "
         f"than sending all {num_calls} calls to {naive}. Data: {', '.join(sources)}."
+    )
+    return r
+
+
+
+@mcp.tool(annotations=READ_ONLY)
+async def pick_models(
+    prompts: Annotated[list[Annotated[str, Field(min_length=1, max_length=4000)]], Field(
+        description="Up to 50 prompts to score in one go.", min_length=1, max_length=50)],
+    preference: Annotated[float, Field(
+        description="Eco vs quality, 0-1 (same as pick_model). 0.5 = validated default.", ge=0, le=1)] = 0.5,
+    clean_whitespace: Annotated[bool, Field(description="Collapse extra blank lines and spaces before scoring.")] = True,
+) -> dict:
+    """Recommend a model for many prompts at once (one model pass), with total estimated savings vs always
+    using the large default model. Use this instead of calling pick_model in a loop."""
+    r = await _post("/pick-model/batch", {
+        "prompts": prompts,
+        "user_preference": preference,
+        "simplification_mode": "structural" if clean_whitespace else "none",
+    })
+    results = r["results"]
+    small = sum(x["recommended_model"] != x["default_model"] for x in results)
+    wh = sum(x["estimated_savings"]["energy_wh"] for x in results)
+    co2 = sum(x["estimated_savings"]["co2_g"] for x in results)
+    r["summary"] = (
+        f"{small} of {len(results)} prompts can use the smaller model. Estimated savings for this batch: "
+        f"{_num(wh)} Wh and {_num(co2)} g CO2 (~{_num(wh / len(results) * 1000)} kWh per 1M prompts like these)."
+    )
+    return r
+
+
+@mcp.tool(annotations=READ_ONLY)
+async def savings_so_far(
+    hours: Annotated[int, Field(description="Look-back window in hours (1-720).", ge=1, le=720)] = 24,
+) -> dict:
+    """Real savings from live calls logged in the last `hours`: actual energy, CO2, water and cost vs the
+    naive setup (large model, default region), from Azure's real token counts."""
+    r = await _get("/summary", {"hours": hours})
+    p = r.get("pct_saved", {})
+    r["summary"] = (
+        f"{r.get('calls', 0)} live calls in the last {hours} h. Saved vs naive: {p.get('energy_wh', 0)}% energy, "
+        f"{p.get('co2_g', 0)}% CO2, {p.get('water_ml', 0)}% water, {p.get('cost_usd', 0)}% cost."
+        if r.get("calls") else f"No live calls logged in the last {hours} h."
+    )
+    return r
+
+
+@mcp.tool(annotations=READ_ONLY)
+async def region_snapshot() -> dict:
+    """Current grid carbon, water use and watershed stress for each Azure region, plus the nearby power
+    plants that feed it. Explains why route_calls prefers one region over another."""
+    regions = await _get("/regions")
+    lines = [
+        f"{REGION_LABELS.get(r['region'], r['region'])}: {r['gco2_per_kwh']} gCO2/kWh, "
+        f"{r['stress_weighted_l_per_kwh']} L/kWh stress-weighted water, site stress {r['site_stress']} "
+        f"({len(r.get('plants', []))} plants, {r['grid_source']} data)"
+        for r in regions
+    ]
+    return {"regions": regions, "summary": " | ".join(lines)}
+
+
+@mcp.tool(annotations=READ_ONLY)
+async def grid_replay(
+    hours: Annotated[int, Field(description="How many recent hours of grid data (1-168).", ge=1, le=168)] = 24,
+) -> dict:
+    """Hourly grid carbon and stress-weighted water per region for recent hours, and which region was best
+    each hour on carbon and on water. Shows how the greenest region changes through the day."""
+    r = await _get("/replay", {"hours": hours})
+    winners = r.get("winners", [])
+    def tally(key):
+        counts = {}
+        for w in winners:
+            name = REGION_LABELS.get(w[key], w[key])
+            counts[name] = counts.get(name, 0) + 1
+        return ", ".join(f"{k} {v}h" for k, v in sorted(counts.items(), key=lambda kv: -kv[1])) or "no data"
+    r["summary"] = (
+        f"Over {len(winners)} hours of EIA data: best on carbon: {tally('carbon')}; "
+        f"best on water: {tally('water')}."
     )
     return r
 

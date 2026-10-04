@@ -59,8 +59,15 @@ def fetch_fuel_mix(api_key: str, ba: str, start: datetime, end: datetime) -> lis
             "sort[0][column]": "period", "sort[0][direction]": "asc",
             "offset": offset, "length": PAGE,
         }
-        r = requests.get(API, params=params, timeout=60)
-        r.raise_for_status()
+        # The API key travels in the URL, and requests puts the full URL in its error messages
+        # (HTTP errors and connection errors alike). Re-raise without it so the key never hits logs.
+        try:
+            r = requests.get(API, params=params, timeout=60)
+            r.raise_for_status()
+        except requests.HTTPError:
+            raise SystemExit(f"EIA request failed for {ba}: HTTP {r.status_code}") from None
+        except requests.RequestException as e:
+            raise SystemExit(f"EIA request failed for {ba}: {type(e).__name__}") from None
         batch = r.json()["response"]["data"]
         rows.extend(batch)
         if len(batch) < PAGE:
