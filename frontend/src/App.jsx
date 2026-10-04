@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Dashboard from './Dashboard.jsx'
 import Demo from './Demo.jsx'
+import Impact from './Impact.jsx'
 import { BrandMark } from './art.jsx'
 import { DEFAULT_SETTINGS } from './Controls.jsx'
 
@@ -35,13 +36,20 @@ export default function App() {
             <span className="tag">Azure · 2 regions</span>
           </div>
           <nav aria-label="Main">
+            <button type="button" className={page === 'impact' ? 'nav active' : 'nav'} aria-current={page === 'impact' ? 'page' : undefined} onClick={() => go('impact')}>
+              Grid & impact
+            </button>
             <button type="button" className={page === 'demo' ? 'nav active' : 'nav'} aria-current={page === 'demo' ? 'page' : undefined} onClick={() => go('demo')}>
               Live demo
             </button>
           </nav>
         </div>
       </header>
-      <main>{page === 'dashboard' ? <Dashboard settings={settings} update={update} /> : <Demo settings={settings} update={update} />}</main>
+      <main>
+        {page === 'dashboard' && <Dashboard settings={settings} update={update} />}
+        {page === 'impact' && <Impact />}
+        {page === 'demo' && <Demo settings={settings} update={update} />}
+      </main>
     </div>
   )
 }

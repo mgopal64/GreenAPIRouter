@@ -10,20 +10,21 @@ const ERRORS = {
   503: 'Live calls are turned off on the server.',
 }
 
-async function post(path, body, headers = {}) {
+async function request(path, init) {
   let res
   try {
-    res = await fetch(`${API_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify(body),
-    })
+    res = await fetch(`${API_URL}${path}`, init)
   } catch {
     throw new Error("Can't reach the server. Is the backend running?")
   }
   if (!res.ok) throw new Error(ERRORS[res.status] || `Request failed (${res.status}).`)
   return res.json()
 }
+
+const post = (path, body, headers = {}) =>
+  request(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) })
+
+const get = (path) => request(path)
 
 // preference: 0 = max eco (small model more often), 0.5 = validated default, 1 = max quality.
 // cleanWhitespace: collapse extra blank lines/spaces before scoring (the prompt sent to the model is unchanged).
@@ -46,3 +47,8 @@ export const complete = (prompt, weights, demoKey, preference = 0.5, cleanWhites
     { prompt, weights, user_preference: preference, simplification_mode: simplification(cleanWhitespace) },
     { 'X-Demo-Token': demoKey },
   )
+
+// Read-only dashboard data (TigerData only; no model calls, no demo key).
+export const getSummary = (hours = 24) => get(`/summary?hours=${hours}`)
+export const getRegions = () => get('/regions')
+export const getReplay = (hours = 24) => get(`/replay?hours=${hours}`)
