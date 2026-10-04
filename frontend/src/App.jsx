@@ -9,21 +9,33 @@ export default function App() {
   // Picker and routing settings, shared by both pages so they always agree.
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const update = (changes) => setSettings((s) => ({ ...s, ...changes }))
+  const go = (next) => {
+    setPage(next)
+    window.scrollTo(0, 0)
+  }
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
-            <BrandMark />
-            <span className="brand-name">Green Router</span>
+            {/* The logo + name is the way home (the Dashboard), like most sites. */}
+            <a
+              href="/"
+              className="brand-link"
+              aria-current={page === 'dashboard' ? 'page' : undefined}
+              onClick={(e) => {
+                e.preventDefault()
+                go('dashboard')
+              }}
+            >
+              <BrandMark />
+              <span className="brand-name">Green Router</span>
+            </a>
             <span className="tag">Azure · 2 regions</span>
           </div>
           <nav aria-label="Main">
-            <button type="button" className={page === 'dashboard' ? 'nav active' : 'nav'} aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => setPage('dashboard')}>
-              Dashboard
-            </button>
-            <button type="button" className={page === 'demo' ? 'nav active' : 'nav'} aria-current={page === 'demo' ? 'page' : undefined} onClick={() => setPage('demo')}>
+            <button type="button" className={page === 'demo' ? 'nav active' : 'nav'} aria-current={page === 'demo' ? 'page' : undefined} onClick={() => go('demo')}>
               Live demo
             </button>
           </nav>
