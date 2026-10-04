@@ -13,10 +13,10 @@ const simple = [
 
 const complex = [
   'Design a distributed rate limiter that works across 50 servers, handles clock skew, and degrades gracefully if Redis goes down. Compare at least three approaches and justify your pick.',
-  'A Python async service intermittently deadlocks under load when using a thread pool and asyncio locks. Walk through the likely causes and how to diagnose each one.',
+  'Implement a B-tree in Python with insert and delete, give the complexity analysis, and write unit tests.',
   'Derive the closed-form solution for linear regression and explain when it fails numerically.',
   'Write an 800-word persuasive op-ed for congestion pricing with exactly four sections, including counterarguments, and never use the letter z.',
-  'Design a database schema and API for a multi-tenant ride-sharing app with surge pricing, and explain the concurrency issues in driver assignment.',
+  "Explain the proof of Godel's first incompleteness theorem at a level a CS grad student could follow, including the diagonal lemma.",
 ]
 
 export const DEMO_PROMPTS = [
