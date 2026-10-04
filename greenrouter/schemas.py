@@ -21,11 +21,17 @@ class EstimatedSavings(BaseModel):
     water_ml: float
 
 
+class TokenEstimate(BaseModel):
+    prompt_tokens: int  # approximate count of the prompt
+    completion_tokens: int  # assumed typical answer length for this complexity
+
+
 class PickModelResponse(BaseModel):
     complexity: Literal["simple", "medium", "complex"]
     recommended_model: str
     default_model: str
-    estimated_savings: EstimatedSavings
+    estimated_savings: EstimatedSavings  # per call, from token_estimate via accounting.impact()
+    token_estimate: TokenEstimate | None = None
 
 
 # --- /route ---

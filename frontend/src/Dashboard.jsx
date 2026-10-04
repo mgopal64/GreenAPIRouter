@@ -37,6 +37,12 @@ const GUTTER_STICKERS = [
 const REGION_LABELS = { westus: 'West US', northcentralus: 'North Central US' }
 const regionName = (id) => REGION_LABELS[id] || id
 
+// Per-call savings are tiny; scaled to a million calls they're readable (input is per-call kWh, kg or L).
+const perMillion = (x) => {
+  const v = x * 1_000_000
+  return v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1)
+}
+
 // Where the grid numbers came from (scoring.grid_at's fallback cascade), worded for the page.
 const SOURCE_LABELS = {
   live: 'live EIA grid data',
@@ -270,9 +276,17 @@ export default function Dashboard() {
                   })}
                 </div>
                 {pick.recommended_model !== pick.default_model ? (
-                  <p className={stale ? 'result stale' : 'result'}>
-                    <span className="badge carbon"><BoltIcon /> saves <strong className="mono">{pick.estimated_savings.energy_wh} Wh</strong> · <strong className="mono">{pick.estimated_savings.co2_g} g</strong> CO₂ per call</span>
-                  </p>
+                  <div className={stale ? 'result stale' : 'result'}>
+                    <span className="badge carbon">
+                      <BoltIcon /> at a million calls, saves <strong className="mono">{perMillion(pick.estimated_savings.energy_wh / 1000)} kWh</strong> · <strong className="mono">{perMillion(pick.estimated_savings.co2_g / 1000)} kg</strong> CO₂ · <strong className="mono">{perMillion(pick.estimated_savings.water_ml / 1000)} L</strong> water
+                    </span>
+                    {pick.token_estimate && (
+                      <p className="muted small token-note">
+                        Estimated from ~{pick.token_estimate.prompt_tokens} prompt tokens + ~{pick.token_estimate.completion_tokens} answer tokens
+                        ({pick.estimated_savings.energy_wh} Wh per call). Live calls use Azure's real token counts.
+                      </p>
+                    )}
+                  </div>
                 ) : (
                   <p className={stale ? 'result muted stale' : 'result muted'}>This prompt needs the larger model.</p>
                 )}
