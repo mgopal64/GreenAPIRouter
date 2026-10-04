@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { complete, pickModel, route } from './api.js'
 import { BoltIcon, Bubbles, DropIcon, RouteDiagram, TankScene, UsageTank, Waves } from './art.jsx'
 import { StickerLayer, useRipples } from './Stickers.jsx'
+import { PreferenceControls, WeightSlider, weightsFor } from './Controls.jsx'
 
 const SAMPLES = [
   { label: 'Grocery list', text: 'Make me a grocery list for tacos' },
@@ -132,13 +133,13 @@ function LiveImpact({ impact }) {
   )
 }
 
-export default function Dashboard() {
+export default function Dashboard({ settings, update }) {
+  const { quality, cleanWhitespace, carbon } = settings
   const [prompt, setPrompt] = useState(SAMPLES[0].text)
   const [pick, setPick] = useState(null)
   const [pickError, setPickError] = useState('')
   const [picking, setPicking] = useState(false)
 
-  const [carbon, setCarbon] = useState(70)
   const [routing, setRouting] = useState(null)
   const [routeError, setRouteError] = useState('')
 
@@ -151,42 +152,46 @@ export default function Dashboard() {
   const [heroRipple, heroRipples] = useRipples()
   const [surfaceRipple, surfaceRipples] = useRipples()
 
-  // The prompt whose answer is on screen. If the textbox no longer matches it, the result is marked out of date.
-  const [pickedText, setPickedText] = useState(null)
-  // The prompt most recently sent; a slow reply to an older click can't overwrite a newer one.
+  // The prompt + setting whose answer is on screen. If either changes, the result is marked out of date.
+  const [picked, setPicked] = useState(null)
+  // The request most recently sent; a slow reply to an older click can't overwrite a newer one.
   const latest = useRef(null)
 
   async function optimize(text) {
     if (!text.trim()) return
-    latest.current = text
+    const key = `${quality}|${cleanWhitespace}|${text}`
+    latest.current = key
     setPicking(true)
     setPickError('')
     try {
-      const result = await pickModel(text)
-      if (latest.current === text) {
+      const result = await pickModel(text, quality / 100, cleanWhitespace)
+      if (latest.current === key) {
         setPick(result)
-        setPickedText(text)
+        setPicked({ text, quality, cleanWhitespace })
       }
     } catch (e) {
-      if (latest.current === text) setPickError(e.message)
+      if (latest.current === key) setPickError(e.message)
     } finally {
-      if (latest.current === text) setPicking(false)
+      if (latest.current === key) setPicking(false)
     }
   }
 
   // Pick for the starting sample once on load; after that the picker only runs on Optimize, Enter or a sample chip.
   useEffect(() => {
     optimize(SAMPLES[0].text)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- intentionally runs once, on load
   }, [])
 
-  const stale = pick && pickedText !== null && prompt.trim() !== pickedText.trim()
+  const stale =
+    pick && picked !== null &&
+    (prompt.trim() !== picked.text.trim() || quality !== picked.quality || cleanWhitespace !== picked.cleanWhitespace)
 
   // Re-route when the slider settles (debounced so dragging doesn't hit the rate limit).
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
         setRouteError('')
-        setRouting(await route({ carbon: carbon / 100, water: (100 - carbon) / 100 }))
+        setRouting(await route(weightsFor(carbon)))
       } catch (e) {
         setRouteError(e.message)
       }
@@ -199,7 +204,7 @@ export default function Dashboard() {
     setLiveError('')
     setLive(null)
     try {
-      setLive(await complete(prompt, { carbon: carbon / 100, water: (100 - carbon) / 100 }, demoKey))
+      setLive(await complete(prompt, weightsFor(carbon), demoKey, quality / 100, cleanWhitespace))
     } catch (e) {
       setLiveError(e.message)
     } finally {
@@ -285,11 +290,12 @@ export default function Dashboard() {
                   Optimize
                 </button>
               </div>
+              <PreferenceControls settings={settings} update={update} />
             </form>
             {pickError && <p className="error" role="alert">{pickError}</p>}
             {pick && (
               <>
-                {stale && <p className="stale-note small">Prompt changed — press Optimize to update.</p>}
+                {stale && <p className="stale-note small">Prompt or setting changed — press Optimize to update.</p>}
                 <div className={stale ? 'models stale' : picking ? 'models busy' : 'models'} aria-live="polite" aria-busy={picking}>
                   {MODELS.map(({ id, size, level }) => {
                     const chosen = pick.recommended_model === id
@@ -316,7 +322,7 @@ export default function Dashboard() {
                     )}
                   </div>
                 ) : (
-                  <p className={stale ? 'result muted stale' : 'result muted'}>This prompt needs the larger model.</p>
+                  <p className={stale ? 'result muted stale' : 'result muted'}>{picked && picked.quality > 50 ? 'Large model chosen at this quality setting.' : 'This prompt needs the larger model.'}</p>
                 )}
               </>
             )}
@@ -327,12 +333,7 @@ export default function Dashboard() {
               <span className="step">STEP 2</span>
               <h2 id="route-h">Route across regions</h2>
             </div>
-            <div className="slider-row">
-              <span className="carbon slider-end"><BoltIcon /> Carbon {carbon}%</span>
-              <label htmlFor="weight" className="sr-only">Carbon versus water priority</label>
-              <input id="weight" type="range" min="0" max="100" step="5" value={carbon} onChange={(e) => setCarbon(Number(e.target.value))} aria-valuetext={`Carbon ${carbon}%, water ${100 - carbon}%`} />
-              <span className="water slider-end">Water {100 - carbon}% <DropIcon /></span>
-            </div>
+            <WeightSlider settings={settings} update={update} />
             {routeError && <p className="error" role="alert">{routeError}</p>}
             {routing && (
               <>

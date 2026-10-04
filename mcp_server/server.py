@@ -58,15 +58,25 @@ async def _post(path: str, body: dict) -> dict:
 @mcp.tool(annotations=READ_ONLY)
 async def pick_model(
     prompt: Annotated[str, Field(description="The prompt you are about to send to an LLM.", min_length=1, max_length=4000)],
+    preference: Annotated[float, Field(
+        description="Eco vs quality, 0-1. 0 = max eco (small model more often), 0.5 = validated default, "
+                    "1 = max quality (large model unless the prompt is simple).", ge=0, le=1)] = 0.5,
+    clean_whitespace: Annotated[bool, Field(
+        description="Collapse extra blank lines and spaces before scoring (the prompt itself is not changed).")] = True,
 ) -> dict:
     """Recommend the lightest model that can handle a prompt, and the energy, CO2 and water saved per call
-    compared with always using the large default model."""
-    r = await _post("/pick-model", {"prompt": prompt})
+    compared with always using the large default model. Savings are estimated from token counts."""
+    r = await _post("/pick-model", {
+        "prompt": prompt,
+        "user_preference": preference,
+        "simplification_mode": "structural" if clean_whitespace else "none",
+    })
     s = r["estimated_savings"]
     downgraded = r["recommended_model"] != r["default_model"]
     r["summary"] = (
-        f"Use {r['recommended_model']} ({r['complexity']} prompt). Saves {s['energy_wh']} Wh, "
-        f"{s['co2_g']} g CO2 and {s['water_ml']} mL water per call vs {r['default_model']}."
+        f"Use {r['recommended_model']} ({r['complexity']} prompt). Saves ~{s['energy_wh']} Wh, "
+        f"{s['co2_g']} g CO2 and {s['water_ml']} mL water per call vs {r['default_model']} "
+        f"(~{s['energy_wh'] * 1000:.3g} kWh per 1M calls)."
         if downgraded
         else f"This prompt needs {r['recommended_model']} ({r['complexity']} prompt); no smaller model fits."
     )

@@ -17,6 +17,8 @@ from .regions import REGIONS
 from .schemas import (
     CompleteRequest,
     CompleteResponse,
+    PickModelBatchRequest,
+    PickModelBatchResponse,
     PickModelRequest,
     PickModelResponse,
     RouteRequest,
@@ -42,6 +44,8 @@ MAX_TRACKED_IPS = 10_000
 COMPLETE_RATE_LIMIT = 5  # per client IP per window
 # /pick-model runs a ~180M-parameter classifier on CPU, so it gets a tighter limit than the global one.
 PICK_RATE_LIMIT = 30  # per client IP per window
+# One batch scores up to 50 prompts, so batches get their own, much smaller allowance.
+PICK_BATCH_RATE_LIMIT = 6  # per client IP per window
 MAX_LIVE_CALLS_PER_DAY = int(os.getenv("MAX_LIVE_CALLS_PER_DAY", "200"))
 MIN_DEMO_TOKEN_LEN = 20
 # Number of reverse proxies in front of the app that append to X-Forwarded-For (1 on Render/Railway/Fly).
@@ -188,6 +192,17 @@ def pick_model(req: PickModelRequest, request: Request) -> PickModelResponse:
     if _rate_limited(f"pick:{_client_ip(request)}", PICK_RATE_LIMIT):
         raise HTTPException(429, "Too many requests")
     return picker.pick_model(req)
+
+
+@app.post("/pick-model/batch", response_model=PickModelBatchResponse)
+def pick_model_batch(req: PickModelBatchRequest, request: Request) -> PickModelBatchResponse:
+    if _rate_limited(f"pickbatch:{_client_ip(request)}", PICK_BATCH_RATE_LIMIT):
+        raise HTTPException(429, "Too many requests")
+    reqs = [
+        PickModelRequest(prompt=p, user_preference=req.user_preference, simplification_mode=req.simplification_mode)
+        for p in req.prompts
+    ]
+    return PickModelBatchResponse(results=picker.pick_models(reqs))
 
 
 @app.post("/route", response_model=RouteResponse)

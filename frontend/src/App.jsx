@@ -2,9 +2,13 @@ import { useState } from 'react'
 import Dashboard from './Dashboard.jsx'
 import Demo from './Demo.jsx'
 import { BrandMark } from './art.jsx'
+import { DEFAULT_SETTINGS } from './Controls.jsx'
 
 export default function App() {
   const [page, setPage] = useState('dashboard')
+  // Picker and routing settings, shared by both pages so they always agree.
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const update = (changes) => setSettings((s) => ({ ...s, ...changes }))
 
   return (
     <div className="app">
@@ -25,7 +29,7 @@ export default function App() {
           </nav>
         </div>
       </header>
-      <main>{page === 'dashboard' ? <Dashboard /> : <Demo />}</main>
+      <main>{page === 'dashboard' ? <Dashboard settings={settings} update={update} /> : <Demo settings={settings} update={update} />}</main>
     </div>
   )
 }

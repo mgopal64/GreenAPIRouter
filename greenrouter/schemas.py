@@ -1,5 +1,5 @@
 """Pydantic models mirroring the v1 API contract in CLAUDE.md."""
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,12 +28,23 @@ class TokenEstimate(BaseModel):
     completion_tokens: int  # assumed typical answer length for this complexity
 
 
+class PickModelBatchRequest(StrictModel):
+    # Up to 50 prompts scored in one model pass (the Live demo page sends its whole prompt set at once).
+    prompts: list[Annotated[str, Field(min_length=1, max_length=4_000)]] = Field(min_length=1, max_length=50)
+    user_preference: float = Field(0.5, ge=0, le=1)
+    simplification_mode: Literal["none", "structural"] = "structural"
+
+
 class PickModelResponse(BaseModel):
     complexity: Literal["simple", "medium", "complex"]
     recommended_model: str
     default_model: str
     estimated_savings: EstimatedSavings  # per call, from token_estimate via accounting.impact()
     token_estimate: TokenEstimate | None = None
+
+
+class PickModelBatchResponse(BaseModel):
+    results: list[PickModelResponse]  # same order as the request's prompts
 
 
 # --- /route ---

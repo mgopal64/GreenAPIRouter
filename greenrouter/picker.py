@@ -79,9 +79,19 @@ def _estimate_savings(est: TokenEstimate, downgraded: bool, provider: str = "azu
 
 
 def pick_model(req: PickModelRequest) -> PickModelResponse:
-    text = simplify_prompt(req.prompt, req.simplification_mode)
+    return _decide(req, score_prompt(simplify_prompt(req.prompt, req.simplification_mode)))
+
+
+def pick_models(reqs: list[PickModelRequest]) -> list[PickModelResponse]:
+    """Batch version of pick_model: scores every prompt in one model pass, same decision rule."""
+    texts = [simplify_prompt(r.prompt, r.simplification_mode) for r in reqs]
+    scores = nvidia_scores(texts)["constraint_ct"]
+    return [_decide(r, s) for r, s in zip(reqs, scores)]
+
+
+def _decide(req: PickModelRequest, score: float) -> PickModelResponse:
     cutoff = cutoff_for(req.user_preference)
-    complexity = "complex" if score_prompt(text) >= cutoff else "simple"
+    complexity = "complex" if score >= cutoff else "simple"
     downgraded = complexity == "simple"
     # Tokens are counted on the original prompt: that's what actually gets sent to the model.
     est = TokenEstimate(
