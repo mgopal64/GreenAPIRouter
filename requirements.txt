@@ -6,3 +6,5 @@ httpx==0.28.1
 psycopg[binary]
 requests
 python-dotenv
+pandas
+openpyxl
