@@ -229,6 +229,7 @@ input[type='password'] { height: 44px; width: 260px; max-width: 100%; }
 .dg-share { font-size: 22px; font-weight: 700; fill: #2a6e75; }
 .dg-unit { font-size: 11px; font-weight: 500; fill: #4e6461; }
 .dg-meta { font-family: 'IBM Plex Mono', monospace !important; font-size: 10.5px; fill: #4e6461; }
+.dg-meta.best { fill: #2a6e75; font-weight: 700; }
 .dg-router { font-size: 14px; font-weight: 700; fill: #e6eec9; }
 /* Model chips inside the router: the chosen one lit, the other dimmed */
 .dg-chip rect { fill: none; stroke: rgba(230, 238, 201, 0.3); stroke-width: 1.5; transition: fill 0.3s, stroke 0.3s; }

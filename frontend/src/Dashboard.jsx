@@ -102,7 +102,11 @@ function Reservoirs({ distribution }) {
 function heroRegions(distribution) {
   const west = [...distribution].sort((a, b) => a.lon - b.lon)
   const pct = percents(west.map((r) => r.share))
-  return west.map((r, i) => ({ name: regionName(r.region), share: r.share, pct: pct[i], carbon: r.grid_carbon_gco2_kwh }))
+  return west.map((r, i) => ({
+    name: regionName(r.region), share: r.share, pct: pct[i],
+    carbon: r.grid_carbon_gco2_kwh,
+    water: r.stress_weighted_l_per_kwh, // liters per kWh weighted by watershed stress: what routing minimizes
+  }))
 }
 
 const CostIcon = () => <span className="cost-icon" aria-hidden="true">$</span>

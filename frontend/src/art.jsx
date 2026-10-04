@@ -45,17 +45,21 @@ function ServerIcon({ x, y }) {
 
 // lead: true = best combined carbon/water score, so it gets the most calls (glowing border);
 // false = gets fewer (slightly faded); undefined = even split.
-function RegionCard({ y, region, lead, standby, delay }) {
+// bestCarbon / bestWater: this region has the lower value on that metric (shown in bold), so the card
+// explains *why* it gets more or less traffic.
+function RegionCard({ y, region, lead, standby, bestCarbon, bestWater, delay }) {
   const pct = region?.pct == null ? '…' : `${region.pct}%`
   return (
     <g className="pop" style={{ animationDelay: delay }}>
       <g className={lead === undefined ? 'dg-region' : lead ? 'dg-region lead' : 'dg-region minor'}>
       {/* Both regions get traffic (the split is the point), so the busier one is highlighted, not the other erased. */}
-      <rect x="430" y={y} width="164" height="84" rx="16" fill="#f3f6e7" className="dg-card" />
+      <rect x="430" y={y} width="164" height="102" rx="16" fill="#f3f6e7" className="dg-card" />
+      <title>Carbon: grams of CO₂ per kWh on this region's grid. Water: liters per kWh, weighted by how stressed the local watershed is.</title>
       <ServerIcon x={444} y={y + 14} />
       <text x="480" y={y + 26} className="dg-name">{region?.name ?? 'Azure region'}</text>
       <text x="480" y={y + 52} className="dg-share">{pct}<tspan className="dg-unit" dx="4">{standby ? '· standby' : 'of calls'}</tspan></text>
-      <text x="480" y={y + 70} className="dg-meta">{region?.carbon == null ? '' : `${region.carbon} g CO₂/kWh`}</text>
+      <text x="480" y={y + 71} className={bestCarbon ? 'dg-meta best' : 'dg-meta'}>{region?.carbon == null ? '' : `${region.carbon} g CO₂/kWh`}</text>
+      <text x="480" y={y + 88} className={bestWater ? 'dg-meta best' : 'dg-meta'}>{region?.water == null ? '' : `${region.water.toFixed(2)} L water/kWh`}</text>
       </g>
     </g>
   )
@@ -96,6 +100,12 @@ export function RouteDiagram({ model, models = ['gpt-4.1-mini', 'gpt-5-mini'], r
   // A region getting no traffic (shown as 0%) is still connected: draw its route dashed, as "standby".
   // Any visible share, even 1%, keeps the normal pipe so the picture never contradicts the number.
   const standby = (r) => r?.pct === 0
+  // The region with the lower value on a metric (none if tied or data missing).
+  const best = (key) => {
+    if (list.length < 2 || list.some((r) => r[key] == null)) return null
+    const sorted = [...list].sort((a, b) => a[key] - b[key])
+    return sorted[0][key] < sorted[1][key] ? sorted[0] : null
+  }
   const leadShare = Math.max(...list.map((r) => r.share))
   const evenSplit = list.length < 2 || list.filter((x) => x.share === leadShare).length > 1
   const isLead = (r) => (evenSplit || !r ? undefined : r.share === leadShare)
@@ -142,8 +152,11 @@ export function RouteDiagram({ model, models = ['gpt-4.1-mini', 'gpt-5-mini'], r
         {models.map((id, i) => <ModelChip key={id} y={146 + i * 32} id={id} chosen={model ? id === model : undefined} />)}
       </g>
 
-      <RegionCard y={28} region={top} lead={isLead(top)} standby={standby(top)} delay="1.3s" />
-      <RegionCard y={188} region={bottom} lead={isLead(bottom)} standby={standby(bottom)} delay="1.6s" />
+      {/* Cards are 102 tall and centred on the route ends (y=70 and y=230). */}
+      <RegionCard y={19} region={top} lead={isLead(top)} standby={standby(top)} delay="1.3s"
+        bestCarbon={best('carbon') === top} bestWater={best('water') === top} />
+      <RegionCard y={179} region={bottom} lead={isLead(bottom)} standby={standby(bottom)} delay="1.6s"
+        bestCarbon={best('carbon') === bottom} bestWater={best('water') === bottom} />
     </svg>
   )
 }
