@@ -45,7 +45,7 @@ function ServerIcon({ x, y }) {
 
 // lead: true = best combined carbon/water score, so it gets the most calls (glowing border);
 // false = gets fewer (slightly faded); undefined = even split.
-function RegionCard({ y, region, lead, delay }) {
+function RegionCard({ y, region, lead, standby, delay }) {
   const pct = region?.pct == null ? '…' : `${region.pct}%`
   return (
     <g className="pop" style={{ animationDelay: delay }}>
@@ -54,7 +54,7 @@ function RegionCard({ y, region, lead, delay }) {
       <rect x="430" y={y} width="164" height="84" rx="16" fill="#f3f6e7" className="dg-card" />
       <ServerIcon x={444} y={y + 14} />
       <text x="480" y={y + 26} className="dg-name">{region?.name ?? 'Azure region'}</text>
-      <text x="480" y={y + 52} className="dg-share">{pct}<tspan className="dg-unit" dx="4">of calls</tspan></text>
+      <text x="480" y={y + 52} className="dg-share">{pct}<tspan className="dg-unit" dx="4">{standby ? '· standby' : 'of calls'}</tspan></text>
       <text x="480" y={y + 70} className="dg-meta">{region?.carbon == null ? '' : `${region.carbon} g CO₂/kWh`}</text>
       </g>
     </g>
@@ -75,7 +75,7 @@ function ModelChip({ y, id, chosen }) {
 
 // Pulses of "power" along a branch: busier branches get denser, faster pulses; an unused one gets none.
 function Current({ d, share }) {
-  if (share != null && share < 0.02) return null
+  if (share != null && share <= 0) return null
   const s = share ?? 0.5
   const gap = Math.round(12 + (1 - s) * 40)
   return (
@@ -93,6 +93,9 @@ export function RouteDiagram({ model, models = ['gpt-4.1-mini', 'gpt-5-mini'], r
   const list = regions ?? [] // null until /route answers
   const [top, bottom] = list
   const width = (r) => (r?.share == null ? 6 : 4 + r.share * 14)
+  // A region getting no traffic (shown as 0%) is still connected: draw its route dashed, as "standby".
+  // Any visible share, even 1%, keeps the normal pipe so the picture never contradicts the number.
+  const standby = (r) => r?.pct === 0
   const leadShare = Math.max(...list.map((r) => r.share))
   const evenSplit = list.length < 2 || list.filter((x) => x.share === leadShare).length > 1
   const isLead = (r) => (evenSplit || !r ? undefined : r.share === leadShare)
@@ -103,11 +106,20 @@ export function RouteDiagram({ model, models = ['gpt-4.1-mini', 'gpt-5-mini'], r
       aria-label={`Your prompt goes to Green Router, which picks ${model ?? 'a model'} and splits calls across ${list.map((r) => `${r.name} ${r.pct}%`).join(' and ') || 'Azure regions'}`}>
       {/* Pipes: drawn in, then pulses flow along them. */}
       <path className="grow" d="M160 150 H 225" fill="none" stroke="#7da78c" strokeWidth="8" strokeLinecap="round" />
-      <path className="grow delay dg-branch" d={branchTop} fill="none" stroke="#7da78c" style={{ strokeWidth: width(top) }} strokeLinecap="round" />
-      <path className="grow delay dg-branch" d={branchBottom} fill="none" stroke="#7da78c" style={{ strokeWidth: width(bottom) }} strokeLinecap="round" />
+      {[[branchTop, top], [branchBottom, bottom]].map(([d, r]) =>
+        standby(r) ? (
+          <g key={d}>
+            <path className="dg-standby" d={d} fill="none" stroke="#a7c3b0" strokeWidth="3" strokeLinecap="round" strokeDasharray="2 9" />
+            {/* connector dot where the route meets the card, so it reads as attached, not broken */}
+            <circle cx="430" cy={d === branchTop ? 70 : 230} r="4.5" fill="#a7c3b0" />
+          </g>
+        ) : (
+          <path key={d} className="grow delay dg-branch" d={d} fill="none" stroke="#7da78c" style={{ strokeWidth: width(r) }} strokeLinecap="round" />
+        ),
+      )}
       <Current d="M160 150 H 225" share={1} />
-      <Current d={branchTop} share={top?.share} />
-      <Current d={branchBottom} share={bottom?.share} />
+      <Current d={branchTop} share={standby(top) ? 0 : top?.share} />
+      <Current d={branchBottom} share={standby(bottom) ? 0 : bottom?.share} />
 
       {/* Your prompt */}
       <g className="pop" style={{ animationDelay: '0.2s' }}>
@@ -130,8 +142,8 @@ export function RouteDiagram({ model, models = ['gpt-4.1-mini', 'gpt-5-mini'], r
         {models.map((id, i) => <ModelChip key={id} y={146 + i * 32} id={id} chosen={model ? id === model : undefined} />)}
       </g>
 
-      <RegionCard y={28} region={top} lead={isLead(top)} delay="1.3s" />
-      <RegionCard y={188} region={bottom} lead={isLead(bottom)} delay="1.6s" />
+      <RegionCard y={28} region={top} lead={isLead(top)} standby={standby(top)} delay="1.3s" />
+      <RegionCard y={188} region={bottom} lead={isLead(bottom)} standby={standby(bottom)} delay="1.6s" />
     </svg>
   )
 }
