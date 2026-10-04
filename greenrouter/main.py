@@ -12,8 +12,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from . import azure_client, grid, picker, router
-from .regions import region_names
+from . import accounting, azure_client, grid, picker, router
+from .regions import REGIONS, region_names
 from .schemas import (
     CompleteRequest,
     CompleteResponse,
@@ -200,7 +200,8 @@ def _take_live_call() -> bool:
 async def complete(
     req: CompleteRequest, request: Request, x_demo_token: str | None = Header(default=None)
 ) -> CompleteResponse:
-    """Send a real prompt: picker chooses small/large, router chooses the region."""
+    """Send a real prompt: picker chooses small/large, router chooses the region,
+    then the call's impact is computed and logged against the naive baseline."""
     expected = os.getenv("DEMO_TOKEN", "")
     if len(expected) < MIN_DEMO_TOKEN_LEN:
         # Fail closed if no token is configured, or it's too short to resist guessing.
@@ -217,12 +218,35 @@ async def complete(
     pick = picker.pick_model(PickModelRequest(prompt=req.prompt))
     size = "large" if pick.complexity == "complex" else "small"
     region = router.choose_region(req.weights)
+
+    # Try the best region; if it fails (e.g. 429 rate limit), fall back to the other one.
+    fallback = next(r.name for r in REGIONS["azure"] if r.name != region)
+    t0 = time.time()
+    for attempt_region in (region, fallback):
+        try:
+            deployment = azure_client.deployment(size)
+            output, prompt_tokens, completion_tokens = await azure_client.chat(
+                attempt_region, deployment, req.prompt)
+            region = attempt_region
+            break
+        except azure_client.AzureError as e:
+            # Details stay in server logs; prompts are never logged.
+            log.warning("Live call failed in %s: %s", attempt_region, e)
+    else:
+        raise HTTPException(502, "Model call failed")
+    latency_ms = int((time.time() - t0) * 1000)
+
+    # Impact of this call vs. naive baseline; logged to TigerData in the background.
+    impact = None
     try:
-        deployment = azure_client.deployment(size)
-        output, prompt_tokens, completion_tokens = await azure_client.chat(region, deployment, req.prompt)
-    except azure_client.AzureError as e:
-        log.warning("Live call failed: %s", e)  # details stay in server logs; prompts are never logged
-        raise HTTPException(502, "Model call failed") from None
+        acc = accounting.account_and_log(
+            prompt="",  # prompts are never logged
+            complexity=pick.complexity, deployment=deployment, region=region,
+            prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, latency_ms=latency_ms,
+        )
+        impact = accounting.to_schema(acc)
+    except Exception as e:  # accounting must never break a live call
+        log.warning("Accounting failed: %s", e)
 
     return CompleteResponse(
         complexity=pick.complexity,
@@ -231,4 +255,5 @@ async def complete(
         output=output,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        impact=impact,
     )
