@@ -16,7 +16,8 @@ def _rows(sql: str, params: tuple = ()) -> list[tuple]:
         with scoring.psycopg.connect(scoring.DSN, connect_timeout=3) as conn:
             return conn.execute(sql, params).fetchall()
     except Exception as e:
-        print(f"[dashboard] query failed ({e.__class__.__name__}: {e})")
+        # Type only: the full message can include the database host and user from TIGER_DSN.
+        print(f"[dashboard] query failed ({e.__class__.__name__})")
         return []
 
 
