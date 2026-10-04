@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { complete, pickModel, route } from './api.js'
+import { API_URL, complete, pickModel, route } from './api.js'
 import { BoltIcon, Bubbles, DropIcon, RouteDiagram, TankScene, UsageTank, Waves } from './art.jsx'
 import { StickerLayer, useRipples } from './Stickers.jsx'
 import { PreferenceControls, WeightSlider, weightsFor } from './Controls.jsx'
@@ -134,6 +134,61 @@ function LiveImpact({ impact }) {
         {' '}— from real token counts, {impact.grid_source === 'static' ? 'static grid estimates' : `${impact.grid_source} EIA grid data`}.
       </p>
     </div>
+  )
+}
+
+// The MCP server's tools, in plain words (see mcp_server/server.py).
+const MCP_TOOLS = [
+  ['pick_model', 'lightest model for a prompt'],
+  ['pick_models', 'the same for up to 50 prompts'],
+  ['route_calls', 'split calls across greener regions'],
+  ['savings_so_far', 'real savings from live calls'],
+  ['region_snapshot', 'why a region is preferred now'],
+  ['grid_replay', 'the best region, hour by hour'],
+]
+
+function AgentsCard() {
+  const [copied, setCopied] = useState(false)
+  const cmd = [
+    'git clone https://github.com/mgopal64/GreenAPIRouter && cd GreenAPIRouter',
+    'pip install -r mcp_server/requirements.txt',
+    `claude mcp add green-router -e GREENROUTER_URL=${API_URL} -- python "$PWD/mcp_server/server.py"`,
+  ].join('\n')
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(cmd)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setCopied(false) // clipboard blocked: the command is still selectable
+    }
+  }
+  return (
+    <section className="card" aria-labelledby="agents-h">
+      <div className="card-head">
+        <span className="step">FOR AI AGENTS</span>
+        <h2 id="agents-h">Use Green Router as a tool</h2>
+        <p className="muted small">
+          An MCP server lets assistants like Claude ask Green Router before they call a model. It runs on your machine and is
+          read-only, so it can't make paid calls.
+        </p>
+      </div>
+      <ul className="tool-list">
+        {MCP_TOOLS.map(([name, what]) => (
+          <li key={name}>
+            <span className="mono tool-name">{name}</span>
+            <span className="muted">{what}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="cmd">
+        <pre className="mono">{cmd}</pre>
+        <button type="button" className="btn secondary cmd-copy" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+      </div>
+      <a className="small readme-link" href="https://github.com/mgopal64/GreenAPIRouter#mcp-server" target="_blank" rel="noreferrer">
+        Full setup in the README →
+      </a>
+    </section>
   )
 }
 
@@ -389,6 +444,7 @@ export default function Dashboard({ settings, update }) {
               )}
             </section>
           )}
+          <AgentsCard />
         </div>
       </div>
     </>

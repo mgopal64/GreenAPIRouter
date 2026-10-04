@@ -1,5 +1,5 @@
 // Backend base URL. VITE_* variables are bundled into the public site, so never put secrets in them.
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 const ERRORS = {
   401: 'Wrong demo key.',
