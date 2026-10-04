@@ -29,11 +29,14 @@ CACHE_TTL_S = 300      # re-read TigerData at most every 5 minutes per key
 LIVE_WINDOW_H = 6      # step 2 of the grid_at cascade: newest hour within this window
 TEMPERATURE = 0.01     # lower = more traffic to the single best region (only affects /route)
 
-# TODO (stats owner): replace with cited per-region values (Microsoft datacenter fact sheets).
+# Microsoft datacenters, Americas FY25 (Jul 2024 - Jun 2025): PUE 1.16, WUE 0.34 L/kWh (IT energy).
+# Source: datacenters.microsoft.com/sustainability/efficiency. Microsoft publishes these by
+# geography, not by Azure region, so both regions share the Americas values.
 SITE = {
-    "westus": {"pue": 1.2, "wue_l_per_kwh": 0.3},
-    "northcentralus": {"pue": 1.2, "wue_l_per_kwh": 0.3},
+    "westus": {"pue": 1.16, "wue_l_per_kwh": 0.34},
+    "northcentralus": {"pue": 1.16, "wue_l_per_kwh": 0.34},
 }
+DEFAULT_SITE = {"pue": 1.16, "wue_l_per_kwh": 0.34}
 DEFAULT_SITE = {"pue": 1.2, "wue_l_per_kwh": 0.3}
 
 _cache: dict = {}

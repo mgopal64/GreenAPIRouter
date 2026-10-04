@@ -16,11 +16,14 @@ from datetime import datetime, timezone
 from . import scoring
 from .regions import DEFAULT_REGION, REGIONS
 
-# TODO (stats owner): replace with cited values (e.g. Jegham et al. 2025, "How Hungry is AI?").
-# Wh of IT energy per 1K tokens, and list price USD per 1M tokens (VERIFY Azure Global Standard prices).
+# Per-query energy from Jegham et al. 2025, "How Hungry is AI?" (arXiv 2505.09598), short query
+# (~300 output tokens), converted to Wh per 1K output tokens. Input/prefill energy is folded in.
+#  - gpt-5-mini: 1.82 Wh / 300 tokens
+#  - gpt-4.1-mini: not separately reported; GPT-4o's 0.42 Wh used as a conservative upper bound
+# Prices: OpenAI list prices (USD per 1M tokens).
 MODEL_ENERGY = {
-    "gpt-4.1-mini": {"wh_per_1k_in": 0.02, "wh_per_1k_out": 0.20, "usd_per_1m_in": 0.40, "usd_per_1m_out": 1.60},
-    "gpt-5-mini":   {"wh_per_1k_in": 0.03, "wh_per_1k_out": 0.30, "usd_per_1m_in": 0.25, "usd_per_1m_out": 2.00},
+    "gpt-4.1-mini": {"wh_per_1k_in": 0.0, "wh_per_1k_out": 1.40, "usd_per_1m_in": 0.40, "usd_per_1m_out": 1.60},
+    "gpt-5-mini":   {"wh_per_1k_in": 0.0, "wh_per_1k_out": 6.07, "usd_per_1m_in": 0.25, "usd_per_1m_out": 2.00},
 }
 DEFAULT_MODEL_ENERGY = MODEL_ENERGY["gpt-5-mini"]
 BASELINE_DEPLOYMENT = os.environ.get("LARGE_DEPLOYMENT", "gpt-5-mini")
