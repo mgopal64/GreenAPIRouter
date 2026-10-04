@@ -177,9 +177,10 @@ app.add_middleware(BodySizeLimit, max_bytes=MAX_BODY_BYTES)
 # headers, and the browser shows "Too many requests" instead of a misleading "Can't reach the server".
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-Demo-Token"],
+    allow_origins=ALLOWED_ORIGINS + ["https://green-router-tau.vercel.app"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_methods=["*"],
+    allow_headers=["*"],
     allow_credentials=False,
 )
 
