@@ -27,7 +27,7 @@ except ImportError:  # lets the module import without the driver installed
 DSN = os.environ.get("TIGER_DSN")
 CACHE_TTL_S = 300      # re-read TigerData at most every 5 minutes per key
 LIVE_WINDOW_H = 6      # step 2 of the grid_at cascade: newest hour within this window
-TEMPERATURE = 0.15     # lower = more traffic to the single best region (only affects /route)
+TEMPERATURE = 0.01     # lower = more traffic to the single best region (only affects /route)
 
 # TODO (stats owner): replace with cited per-region values (Microsoft datacenter fact sheets).
 SITE = {
