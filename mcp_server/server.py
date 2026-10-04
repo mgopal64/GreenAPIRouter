@@ -121,9 +121,20 @@ async def route_calls(
     def change(pct: float, what: str) -> str:
         return f"{abs(pct)}% {'less' if pct >= 0 else 'more'} {what}"
 
+    # Per-region carbon and water (same figures as the website's route diagram), and who wins each.
+    dist = r["distribution"]
+    label = lambda d: REGION_LABELS.get(d["region"], d["region"])
+    per_region = "; ".join(
+        f"{label(d)}: {d['grid_carbon_gco2_kwh']} gCO2/kWh, {d['stress_weighted_l_per_kwh']:.2f} L water/kWh" for d in dist
+    )
+    def winner(key):
+        lo = min(dist, key=lambda d: d[key])
+        return label(lo) if sum(d[key] == lo[key] for d in dist) == 1 else "tie"
+
     r["summary"] = (
         f"Send {split}. {change(s['pct_co2'], 'CO2')} and {change(s['pct_water_stress'], 'water impact')} "
-        f"than sending all {num_calls} calls to {naive}. Data: {', '.join(sources)}."
+        f"than sending all {num_calls} calls to {naive}. {per_region}. Lower carbon: {winner('grid_carbon_gco2_kwh')}; "
+        f"lower water impact: {winner('stress_weighted_l_per_kwh')}. Data: {', '.join(sources)}."
     )
     return r
 

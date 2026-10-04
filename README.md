@@ -41,15 +41,7 @@ Energy figures rely on published per-token estimates (see [Data and methodology]
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A[Prompt<br/>app or AI agent] --> B[Picker<br/>NVIDIA prompt classifier]
-    B -->|small or large model| C[Router<br/>carbon + water score]
-    D[(Tiger Data<br/>hourly EIA grid,<br/>USGS water stress)] --> C
-    C -->|best region| E[Azure OpenAI<br/>West US / North Central US]
-    E --> F[Audit<br/>energy, CO₂, water, cost]
-    F --> D
-```
+![Green Router architecture: prompt → Picker → Router → Azure OpenAI → Audit, with Tiger Data supplying grid and water data and storing every audited call](docs/architecture.svg)
 
 1. **Picker** (`greenrouter/picker.py`, `nvidia_model.py`): scores the prompt with NVIDIA's [prompt-task-and-complexity-classifier](https://huggingface.co/nvidia/prompt-task-and-complexity-classifier) (DeBERTa-v3, about 184M parameters). Its `constraint_ct` score against a cutoff of 0.70, chosen on 42 hand-labeled prompts, decides small vs. large. The model versions are pinned.
 2. **Router** (`router.py`, `scoring.py`): scores each region on grid carbon and stress-weighted water, normalizes them, applies the carbon/water weights and turns the scores into traffic shares with a softmax. `/route` returns the split for a batch; a single live call goes to the best region, with the other as fallback.

@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" role="img" aria-label="Green Router architecture: a prompt from the website, REST API or an MCP agent goes to the Picker (which model), then the Router (which region, using carbon and water data from Tiger Data), then Azure OpenAI in West US or North Central US, then the Audit, which logs energy, CO2, water and cost back to Tiger Data. Data jobs load EIA grid data, USGS water stress and EIA-860 power plants into Tiger Data.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2A6E75"/>
+    </marker>
+    <marker id="arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7DA78C"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#123A3E" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .title { font-size: 22px; font-weight: 700; fill: #15302F; }
+    .sub { font-size: 15px; fill: #3F5A57; }
+    .light-title { font-size: 22px; font-weight: 700; fill: #F3F6E7; }
+    .light-sub { font-size: 15px; fill: #BFD8D5; }
+    .label { font-size: 13px; font-weight: 600; fill: #2A6E75; letter-spacing: 1.5px; }
+    .pill { font-size: 15px; font-weight: 600; fill: #15302F; }
+    .note { font-size: 14px; fill: #3F5A57; font-style: italic; }
+    .step { font-size: 13px; font-weight: 700; fill: #2A6E75; letter-spacing: 1px; }
+  </style>
+
+  <!-- Card background (works on light and dark GitHub themes) -->
+  <rect x="0" y="0" width="1200" height="560" rx="24" fill="#F3F6E7"/>
+
+  <!-- Entry points -->
+  <text x="40" y="52" class="label">WAYS IN</text>
+  <rect x="40" y="66" width="112" height="36" rx="18" fill="#E6EEC9" stroke="#C9D3B0"/>
+  <text x="96" y="90" text-anchor="middle" class="pill">Website</text>
+  <rect x="40" y="110" width="112" height="36" rx="18" fill="#E6EEC9" stroke="#C9D3B0"/>
+  <text x="96" y="134" text-anchor="middle" class="pill">REST API</text>
+  <rect x="40" y="154" width="112" height="36" rx="18" fill="#E6EEC9" stroke="#C9D3B0"/>
+  <text x="96" y="178" text-anchor="middle" class="pill">MCP agent</text>
+  <path d="M152 128 C 172 128, 172 128, 186 128" fill="none" stroke="#2A6E75" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 1 Picker -->
+  <g filter="url(#shadow)">
+    <rect x="192" y="70" width="196" height="120" rx="18" fill="#FBFCF4" stroke="#2A6E75" stroke-width="2"/>
+  </g>
+  <text x="212" y="98" class="step">1 · RIGHT MODEL</text>
+  <text x="212" y="128" class="title">Picker</text>
+  <text x="212" y="154" class="sub">NVIDIA classifier</text>
+  <text x="212" y="174" class="sub">→ small or large model</text>
+
+  <path d="M388 130 L 428 130" fill="none" stroke="#2A6E75" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 2 Router -->
+  <g filter="url(#shadow)">
+    <rect x="434" y="70" width="196" height="120" rx="18" fill="#FBFCF4" stroke="#2A6E75" stroke-width="2"/>
+  </g>
+  <text x="454" y="98" class="step">2 · RIGHT PLACE</text>
+  <text x="454" y="128" class="title">Router</text>
+  <text x="454" y="154" class="sub">carbon + water score</text>
+  <text x="454" y="174" class="sub">→ best region</text>
+
+  <!-- Router to the two regions -->
+  <path d="M630 118 C 660 118, 660 92, 690 92" fill="none" stroke="#2A6E75" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <path d="M630 142 C 660 142, 660 168, 690 168" fill="none" stroke="#2A6E75" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Azure OpenAI regions -->
+  <text x="696" y="52" class="label">AZURE OPENAI</text>
+  <g filter="url(#shadow)">
+    <rect x="696" y="66" width="196" height="52" rx="14" fill="#FBFCF4" stroke="#7DA78C" stroke-width="2"/>
+    <rect x="696" y="142" width="196" height="52" rx="14" fill="#FBFCF4" stroke="#7DA78C" stroke-width="2"/>
+  </g>
+  <text x="716" y="98" class="pill">West US</text>
+  <text x="716" y="174" class="pill">North Central US</text>
+  <text x="794" y="218" text-anchor="middle" class="note">automatic fallback</text>
+
+  <path d="M892 92 C 912 92, 912 118, 932 118" fill="none" stroke="#2A6E75" stroke-width="2.5"/>
+  <path d="M892 168 C 912 168, 912 142, 932 142" fill="none" stroke="#2A6E75" stroke-width="2.5"/>
+  <path d="M930 130 L 954 130" fill="none" stroke="#2A6E75" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 3 Audit -->
+  <g filter="url(#shadow)">
+    <rect x="960" y="70" width="200" height="120" rx="18" fill="#123A3E"/>
+  </g>
+  <text x="980" y="98" class="step" fill="#C2D099" style="fill:#C2D099">3 · PROOF</text>
+  <text x="980" y="128" class="light-title">Audit</text>
+  <text x="980" y="154" class="light-sub">energy · CO₂ · water</text>
+  <text x="980" y="174" class="light-sub">and cost vs. naive</text>
+
+  <!-- Tiger Data (database cylinder) -->
+  <g filter="url(#shadow)">
+    <path d="M434 352 L434 452 A 98 22 0 0 0 630 452 L630 352" fill="#2A6E75"/>
+    <ellipse cx="532" cy="352" rx="98" ry="22" fill="#3B8189"/>
+  </g>
+  <text x="532" y="402" text-anchor="middle" class="light-title">Tiger Data</text>
+  <text x="532" y="428" text-anchor="middle" class="light-sub">hourly time series</text>
+
+  <!-- Tiger Data feeds the Router -->
+  <path d="M532 328 L 532 196" fill="none" stroke="#2A6E75" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="544" y="268" class="note">grid carbon + water stress</text>
+
+  <!-- Audit logs back to Tiger Data -->
+  <path d="M1060 190 C 1060 400, 820 402, 636 402" fill="none" stroke="#7DA78C" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrow-soft)"/>
+  <text x="830" y="438" text-anchor="middle" class="note">logs every live call</text>
+
+  <!-- Data sources and jobs -->
+  <text x="40" y="318" class="label">DATA JOBS</text>
+  <rect x="40" y="332" width="300" height="140" rx="18" fill="#FBFCF4" stroke="#7DA78C" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="62" y="368" class="pill">EIA-930 · hourly grid mix</text>
+  <text x="62" y="400" class="pill">USGS · watershed stress</text>
+  <text x="62" y="432" class="pill">EIA-860 · power plants</text>
+  <text x="62" y="458" class="sub">with IPCC + NREL factors</text>
+  <path d="M340 402 L 428 402" fill="none" stroke="#7DA78C" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrow-soft)"/>
+
+  <!-- Legend -->
+  <line x1="40" y1="516" x2="76" y2="516" stroke="#2A6E75" stroke-width="2.5"/>
+  <text x="86" y="521" class="sub">request path</text>
+  <line x1="210" y1="516" x2="246" y2="516" stroke="#7DA78C" stroke-width="2.5" stroke-dasharray="7 6"/>
+  <text x="256" y="521" class="sub">data flow</text>
+</svg>
