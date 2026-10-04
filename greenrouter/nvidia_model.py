@@ -1,4 +1,5 @@
 import json
+import threading
 
 import numpy as np
 import torch
@@ -116,12 +117,16 @@ class CustomModel(nn.Module, PyTorchModelHubMixin):
 
 _tokenizer = None
 _model = None
+# FastAPI runs sync endpoints in a thread pool: one lock stops double-loading the model and
+# keeps concurrent requests from oversubscribing the CPU (torch already uses every core).
+_lock = threading.Lock()
 
 
 def _load():
     global _tokenizer, _model
     if _model is not None:
         return
+    # Caller holds _lock.
     with open(hf_hub_download(REPO, "config.json")) as f:
         config = json.load(f)
     _tokenizer = AutoTokenizer.from_pretrained(REPO)
@@ -137,16 +142,19 @@ def _load():
 def nvidia_scores(prompts, batch_size=8):
     """Returns a dict of lists (one entry per prompt): prompt_complexity_score,
     reasoning, creativity_scope, constraint_ct, domain_knowledge, task_type_1, ..."""
-    _load()
     merged = {}
     for start in range(0, len(prompts), batch_size):
         chunk = prompts[start:start + batch_size]
-        enc = _tokenizer(
-            chunk, return_tensors="pt", max_length=512,
-            padding="max_length", truncation=True,
-        )
-        with torch.no_grad():
-            out = _model(enc)
+        with _lock:
+            _load()
+            # Pad to the longest prompt in the batch, not always 512 (mean pooling is masked,
+            # so scores don't change; short prompts just run much faster).
+            enc = _tokenizer(
+                chunk, return_tensors="pt", max_length=512,
+                padding="longest", truncation=True,
+            )
+            with torch.no_grad():
+                out = _model(enc)
         for k, v in out.items():
             merged.setdefault(k, []).extend(v)
     return merged

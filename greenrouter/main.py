@@ -12,8 +12,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from . import accounting, azure_client, grid, picker, router
-from .regions import REGIONS, region_names
+from . import accounting, azure_client, picker, router
+from .regions import REGIONS
 from .schemas import (
     CompleteRequest,
     CompleteResponse,
@@ -40,6 +40,8 @@ RATE_WINDOW_S = 60
 MAX_TRACKED_IPS = 10_000
 # Live model calls spend real credits, so /complete has its own, much tighter limits.
 COMPLETE_RATE_LIMIT = 5  # per client IP per window
+# /pick-model runs a ~180M-parameter classifier on CPU, so it gets a tighter limit than the global one.
+PICK_RATE_LIMIT = 30  # per client IP per window
 MAX_LIVE_CALLS_PER_DAY = int(os.getenv("MAX_LIVE_CALLS_PER_DAY", "200"))
 MIN_DEMO_TOKEN_LEN = 20
 # Number of reverse proxies in front of the app that append to X-Forwarded-For (1 on Render/Railway/Fly).
@@ -48,10 +50,17 @@ TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Refresh live grid data hourly in the background so requests never wait on the grid provider.
-    task = asyncio.create_task(grid.refresh_forever(region_names()))
+    # Load the picker model in the background so the first real request doesn't wait on it.
+    warm = asyncio.create_task(_warm_picker())
     yield
-    task.cancel()
+    warm.cancel()
+
+
+async def _warm_picker() -> None:
+    try:
+        await asyncio.to_thread(picker.pick_model, PickModelRequest(prompt="warm up"))
+    except Exception:
+        log.exception("Picker warm-up failed; it will retry on the first request")
 
 
 app = FastAPI(
@@ -62,13 +71,6 @@ app = FastAPI(
     openapi_url="/openapi.json" if IS_DEV else None,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-Demo-Token"],
-    allow_credentials=False,
-)
 
 
 @app.exception_handler(RequestValidationError)
@@ -165,6 +167,16 @@ class BodySizeLimit:
 
 app.add_middleware(BodySizeLimit, max_bytes=MAX_BODY_BYTES)
 
+# Added last so it's the outermost layer: early responses from the guards above (429, 413) still get CORS
+# headers, and the browser shows "Too many requests" instead of a misleading "Can't reach the server".
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Demo-Token"],
+    allow_credentials=False,
+)
+
 
 @app.get("/health")
 def health() -> dict:
@@ -172,8 +184,9 @@ def health() -> dict:
 
 
 @app.post("/pick-model", response_model=PickModelResponse)
-def pick_model(req: PickModelRequest) -> PickModelResponse:
-    """PLACEHOLDER output until the teammate-owned picker in picker.py is plugged in."""
+def pick_model(req: PickModelRequest, request: Request) -> PickModelResponse:
+    if _rate_limited(f"pick:{_client_ip(request)}", PICK_RATE_LIMIT):
+        raise HTTPException(429, "Too many requests")
     return picker.pick_model(req)
 
 
@@ -215,9 +228,11 @@ async def complete(
     if not _take_live_call():
         raise HTTPException(429, "Daily live-call limit reached")
 
-    pick = picker.pick_model(PickModelRequest(prompt=req.prompt))
+    # Model inference is CPU-bound; run it in a thread so it doesn't block the event loop.
+    pick = await asyncio.to_thread(picker.pick_model, PickModelRequest(prompt=req.prompt))
     size = "large" if pick.complexity == "complex" else "small"
-    region = router.choose_region(req.weights)
+    # Routing may query TigerData (blocking I/O); keep it off the event loop like the picker.
+    region = await asyncio.to_thread(router.choose_region, req.weights)
 
     # Try the best region; if it fails (e.g. 429 rate limit), fall back to the other one.
     fallback = next(r.name for r in REGIONS["azure"] if r.name != region)
@@ -239,7 +254,9 @@ async def complete(
     # Impact of this call vs. naive baseline; logged to TigerData in the background.
     impact = None
     try:
-        acc = accounting.account_and_log(
+        # Impact math reads scoring data (may hit TigerData on a cold cache), so run it off the event loop too.
+        acc = await asyncio.to_thread(
+            accounting.account_and_log,
             prompt="",  # prompts are never logged
             complexity=pick.complexity, deployment=deployment, region=region,
             prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, latency_ms=latency_ms,

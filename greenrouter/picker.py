@@ -8,7 +8,9 @@ easy ones to the big model). Only "simple" and "complex" are returned;
 
 The signature of pick_model is unchanged, so main.py doesn't change.
 """
-from . import grid, scoring
+from datetime import datetime, timezone
+
+from . import scoring
 from .nvidia_model import nvidia_scores
 from .regions import DEFAULT_REGION, KWH_PER_CALL, REGIONS
 from .schemas import EstimatedSavings, PickModelRequest, PickModelResponse
@@ -34,7 +36,7 @@ def _estimate_savings(downgraded: bool, provider: str = "azure") -> EstimatedSav
     (default) region so it matches /route's baseline."""
     kwh_saved = KWH_PER_CALL * (1 - SMALL_MODEL_ENERGY_FACTOR) if downgraded else 0.0
     region = next(r for r in REGIONS[provider] if r.name == DEFAULT_REGION[provider])
-    carbon = grid.carbon(region.name, region.grid_carbon_gco2_kwh)
+    carbon = scoring.grid_at(region, datetime.now(timezone.utc))["gco2_per_kwh"]  # same source as /route
     return EstimatedSavings(
         energy_wh=round(kwh_saved * 1000, 3),
         co2_g=round(kwh_saved * carbon, 3),

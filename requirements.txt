@@ -3,8 +3,16 @@ uvicorn[standard]==0.54.0
 pydantic==2.13.5
 starlette==1.7.0
 httpx==0.28.1
-psycopg[binary]
-requests
-python-dotenv
-pandas
-openpyxl
+# Model picker (NVIDIA prompt-task-and-complexity-classifier, DeBERTa-v3 backbone)
+torch==2.14.1
+transformers==5.18.0
+huggingface_hub==1.33.0
+numpy==2.5.3
+sentencepiece==0.2.2
+protobuf==7.36.2
+# Data jobs (EIA ingest, USGS/plant water loaders) + TigerData
+psycopg[binary]==3.3.6
+requests==2.34.2
+python-dotenv==1.2.4
+pandas==3.0.6
+openpyxl==3.1.5
