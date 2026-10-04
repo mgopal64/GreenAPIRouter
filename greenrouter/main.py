@@ -11,6 +11,8 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Header, HTTPException, Query, Request
+from . import accounting, azure_client, dashboard, picker, router
 
 from . import accounting, azure_client, picker, router
 from .regions import REGIONS
@@ -209,6 +211,24 @@ def pick_model_batch(req: PickModelBatchRequest, request: Request) -> PickModelB
 def route(req: RouteRequest) -> RouteResponse:
     return router.route(req)
 
+# --- Read-only dashboard data (TigerData only; no Azure calls) ---
+
+@app.get("/summary")
+def summary(hours: int = Query(24, ge=1, le=24 * 30)) -> dict:
+    """Totals from logged /complete calls over the last `hours`: actual vs. naive baseline."""
+    return dashboard.summary(hours)
+
+
+@app.get("/regions")
+def regions() -> list[dict]:
+    """Per-region snapshot for the map: carbon, stress-weighted water, watershed, plants."""
+    return dashboard.regions()
+
+
+@app.get("/replay")
+def replay(hours: int = Query(24, ge=1, le=24 * 7)) -> dict:
+    """Hourly carbon and stress-weighted water per region, plus the winner each hour."""
+    return dashboard.replay(hours)
 
 _live_calls = {"day": None, "count": 0}
 
