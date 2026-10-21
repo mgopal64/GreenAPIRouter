@@ -104,7 +104,7 @@ def account_and_log(*, prompt: str, complexity: str, deployment: str, region: st
     row = (at, complexity, deployment, region, prompt_tokens, completion_tokens, latency_ms,
            a["grid_source"], a["energy_wh"], a["co2_g"], a["water_ml"], a["water_stress_ml"], a["cost_usd"],
            b["deployment"], b["region"], b["energy_wh"], b["co2_g"], b["water_ml"], b["water_stress_ml"],
-           b["cost_usd"], prompt[:80])
+           b["cost_usd"], None)
     threading.Thread(target=_write, args=(row,), daemon=True).start()
     return acc
 
