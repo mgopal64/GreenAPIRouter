@@ -1,0 +1,11 @@
+.env
+.env.*
+.venv
+.git
+**/__pycache__
+*.ipynb
+frontend
+node_modules
+tools
+db
+jobs
