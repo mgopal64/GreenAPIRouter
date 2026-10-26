@@ -91,7 +91,7 @@ function Reservoirs({ distribution }) {
           <div key={r.region} className="tank-col">
             <span className="tank-pct mono">{pct[i]}%</span>
             <span className="tank-label">{regionName(r.region)}</span>
-            <span className="tank-meta mono">{r.grid_carbon_gco2_kwh} g CO₂/kWh · site stress {r.site_stress.toFixed(2)}</span>
+            <span className="tank-meta mono">{r.grid_carbon_gco2_kwh} g CO₂/kWh · site stress {r.site_stress.toFixed(2)}<br />{r.stress_weighted_l_per_kwh.toFixed(3)} stress-weighted L/kWh</span>
           </div>
         ))}
       </div>
