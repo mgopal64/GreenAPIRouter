@@ -54,8 +54,8 @@ export function WeightSlider({ settings, update }) {
         min="0"
         max="100"
         step="5"
-        value={carbon}
-        onChange={(e) => update({ carbon: Number(e.target.value) })}
+        value={100 - carbon}
+        onChange={(e) => update({ carbon: 100 - Number(e.target.value) })}
         aria-valuetext={`Carbon ${carbon}%, water ${100 - carbon}%`}
       />
       <span className="water slider-end">Water {100 - carbon}% <DropIcon /></span>

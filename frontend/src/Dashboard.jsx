@@ -91,7 +91,7 @@ function Reservoirs({ distribution }) {
           <div key={r.region} className="tank-col">
             <span className="tank-pct mono">{pct[i]}%</span>
             <span className="tank-label">{regionName(r.region)}</span>
-            <span className="tank-meta mono">{r.grid_carbon_gco2_kwh} g CO₂/kWh · water stress {r.site_stress.toFixed(2)}</span>
+            <span className="tank-meta mono">{r.grid_carbon_gco2_kwh} g CO₂/kWh · site stress {r.site_stress.toFixed(2)}</span>
           </div>
         ))}
       </div>
@@ -200,6 +200,10 @@ export default function Dashboard({ settings, update }) {
   const [picking, setPicking] = useState(false)
 
   const [routing, setRouting] = useState(null)
+  const dist = routing?.distribution ?? []
+  const bestCarbon = dist.length ? dist.reduce((a, b) => a.grid_carbon_gco2_kwh < b.grid_carbon_gco2_kwh ? a : b) : null
+  const bestWater = dist.length ? dist.reduce((a, b) => a.stress_weighted_l_per_kwh < b.stress_weighted_l_per_kwh ? a : b) : null
+  const dominated = bestCarbon && bestWater && bestCarbon.region === bestWater.region
   const [routeError, setRouteError] = useState('')
 
   const [showLive, setShowLive] = useState(false)
@@ -391,6 +395,11 @@ export default function Dashboard({ settings, update }) {
             <div className="card-head">
               <span className="step">STEP 2</span>
               <h2 id="route-h">Route across regions</h2>
+              {dominated && (
+                <p style={{ padding: '8px 12px', borderRadius: 8, background: '#e8f0ea', color: '#1f3d33', fontSize: '0.9rem', margin: '8px 0 12px' }}>
+                  {REGION_LABELS[bestCarbon.region] ?? bestCarbon.region} is better on both carbon and water this hour, so every slider setting routes here.
+                </p>
+              )}
             </div>
             <WeightSlider settings={settings} update={update} />
             {routeError && <p className="error" role="alert">{routeError}</p>}
@@ -399,11 +408,12 @@ export default function Dashboard({ settings, update }) {
                 <Reservoirs distribution={routing.distribution} />
                 <p className="result badges">
                   <Badge value={routing.savings.pct_co2} label="CO₂" Icon={BoltIcon} kind="carbon" />
-                  <Badge value={routing.savings.pct_water_stress} label="water impact" Icon={DropIcon} kind="water" />
+                  <Badge value={routing.savings.pct_water} label="water used" Icon={DropIcon} kind="water" />
+                  <Badge value={routing.savings.pct_water_stress} label="stress-weighted water" Icon={DropIcon} kind="water" />
                   <span className="muted small">vs. sending everything to {regionName(routing.naive_baseline.region)}</span>
                 </p>
                 <p className="muted small source-note">
-                  Water impact = liters used × how stressed the local watershed is (0–1). Based on {sourceNote(routing.distribution)}.
+                  Water impact = onsite cooling water × local watershed stress + grid water × stress at the largest plants for each fuel (seawater-cooled plants count as zero). Stress = USGS consumption/supply (0–1). Based on {sourceNote(routing.distribution)}.
                 </p>
               </>
             )}

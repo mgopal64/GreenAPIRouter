@@ -145,7 +145,8 @@ export default function Demo({ settings, update }) {
             <div className="routing-line">
               <span>On top of that, routing across regions gives:</span>
               <Change pct={routing.savings.pct_co2} label="CO₂" Icon={BoltIcon} kind="carbon" />
-              <Change pct={routing.savings.pct_water_stress} label="water impact" Icon={DropIcon} kind="water" />
+              <Change pct={routing.savings.pct_water} label="water used" Icon={DropIcon} kind="water" />
+              <Change pct={routing.savings.pct_water_stress} label="stress-weighted water" Icon={DropIcon} kind="water" />
             </div>
           </section>
 
